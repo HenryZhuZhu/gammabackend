@@ -291,6 +291,10 @@ async def beautify_start(file: UploadFile = File(...)):
     generation_id = call_gamma_from_template(prompt)
 
     return JSONResponse({"generationId": generation_id})
+print("===== OUTLINE TEXT =====")
+print(outline_text)
+print("========================")
+
 
 
 @app.get("/api/beautify_status")
