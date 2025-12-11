@@ -276,7 +276,10 @@ async def beautify_start(file: UploadFile = File(...)):
     file_bytes = await file.read()
     parsed = extract_ppt_structure_and_text(file_bytes)
     outline_text = parsed["outline_text"]
-
+  # 🔍 调试：打印从 PPT 中抽取出来的文字
+    print("===== OUTLINE TEXT BEGIN =====")
+    print(outline_text)
+    print("=====  OUTLINE TEXT END  =====")
     prompt = (
         "You are an expert presentation designer. "
         "Please take the following slide contents from a partly-finished deck and "
@@ -291,9 +294,8 @@ async def beautify_start(file: UploadFile = File(...)):
     generation_id = call_gamma_from_template(prompt)
 
     return JSONResponse({"generationId": generation_id})
-print("===== OUTLINE TEXT =====")
-print(outline_text)
-print("========================")
+
+
 
 
 
