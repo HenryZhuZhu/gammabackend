@@ -96,7 +96,7 @@ def extract_ppt_structure_and_text(file_bytes: bytes) -> Dict[str, Any]:
 def call_gamma_from_template(prompt_text: str) -> str:
     """
     使用 Gamma 的“Create from template”接口创建新的 gamma 内容：
-    POST https://public-api.gamma.app/v1.0/generations/from-template :contentReference[oaicite:7]{index=7}
+    POST https://public-api.gamma.app/v1.0/generations/from-template
 
     返回 generationId，用于后续轮询。
     """
@@ -120,20 +120,20 @@ def call_gamma_from_template(prompt_text: str) -> str:
         folder_ids = [f.strip() for f in GAMMA_FOLDER_IDS.split(",") if f.strip()]
 
     payload: Dict[str, Any] = {
-        "gammaId": GAMMA_TEMPLATE_ID,        # 模板 ID（必填）:contentReference[oaicite:8]{index=8}
+        "gammaId": GAMMA_TEMPLATE_ID,        # 模板 ID（必填）
         "prompt": prompt_text,               # 输入内容+指令（必填）
-        "exportAs": GAMMA_EXPORT_FORMAT,     # "pdf" 或 "pptx":contentReference[oaicite:9]{index=9}
+        "exportAs": GAMMA_EXPORT_FORMAT,     # "pdf" 或 "pptx"
     }
 
     if GAMMA_THEME_ID:
-        payload["themeId"] = GAMMA_THEME_ID  # 覆盖模板主题（可选）:contentReference[oaicite:10]{index=10}
+        payload["themeId"] = GAMMA_THEME_ID  # 覆盖模板主题（可选）
 
     if folder_ids:
-        payload["folderIds"] = folder_ids    # 保存到指定文件夹（可选）:contentReference[oaicite:11]{index=11}
+        payload["folderIds"] = folder_ids    # 保存到指定文件夹（可选）
 
     headers = {
         "Content-Type": "application/json",
-        "X-API-KEY": GAMMA_API_KEY,          # 文档要求用这个 header，不是 Bearer:contentReference[oaicite:12]{index=12}
+        "X-API-KEY": GAMMA_API_KEY,
     }
 
     try:
@@ -141,16 +141,28 @@ def call_gamma_from_template(prompt_text: str) -> str:
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Failed to call Gamma: {e}")
 
-    if resp.status_code != 200:
+    # ✅ 关键修复点：接受所有 2xx 为成功，而不是只认 200
+    if not resp.ok:
+        # 非 2xx：真正的错误，直接把 Gamma 返回内容透传出去方便调试
         raise HTTPException(
             status_code=resp.status_code,
             detail=f"Gamma create-from-template error: {resp.text}",
         )
 
-    data = resp.json()
+    try:
+        data = resp.json()
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Gamma response is not valid JSON: {e}, raw: {resp.text}",
+        )
+
     generation_id = data.get("generationId")
     if not generation_id:
-        raise HTTPException(status_code=500, detail="Gamma did not return generationId")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Gamma did not return generationId. Raw response: {data}",
+        )
 
     return generation_id
 
