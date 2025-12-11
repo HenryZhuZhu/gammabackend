@@ -193,25 +193,41 @@ def get_gamma_generation(generation_id: str) -> Dict[str, Any]:
     return data
 
 
-def download_gamma_file(gamma_result: Dict[str, Any], expected_format: str = "pdf") -> bytes:
+def download_gamma_file(gamma_result: Dict[str, Any]) -> bytes:
     """
-    从 Gamma 结果中找到 PDF/PPTX 的 URL 并下载
+    从 Gamma 结果中找到导出文件 URL 并下载。
+
+    按 Gamma 最新返回结果格式：
+      - 如果设置了 exportAs（pdf 或 pptx），响应里会有一个单独的 exportUrl 字段，
+        比如：
+        {
+          "status": "completed",
+          "gammaUrl": "...",
+          "exportUrl": "https://assets.api.gamma.app/export/pdf/.../xxx.pdf",
+          ...
+        }
+    所以我们优先使用 exportUrl。
     """
     file_url: Optional[str] = None
 
-    file_urls = gamma_result.get("fileUrls") or gamma_result.get("files") or {}
-    if isinstance(file_urls, dict):
-        file_url = file_urls.get(expected_format)
+    # 1. 优先使用 exportUrl（这是文档和你日志里都实锤存在的字段）
+    file_url = gamma_result.get("exportUrl")
 
-    if not file_url and expected_format == "pdf":
-        file_url = gamma_result.get("pdfUrl")
-    if not file_url and expected_format == "pptx":
-        file_url = gamma_result.get("pptxUrl")
+    # 2. 向下兼容旧结构（如果将来 Gamma 再改回 fileUrls 也不至于挂）
+    if not file_url:
+        file_urls = gamma_result.get("fileUrls") or gamma_result.get("files") or {}
+        if isinstance(file_urls, dict):
+            # 这里不再用 expected_format，直接随缘取一个
+            file_url = file_urls.get("pdf") or file_urls.get("pptx")
+
+    # 3. 再兜底 pdfUrl/pptxUrl
+    if not file_url:
+        file_url = gamma_result.get("pdfUrl") or gamma_result.get("pptxUrl")
 
     if not file_url:
         raise HTTPException(
             status_code=500,
-            detail=f"Gamma result completed but did not include {expected_format} file URL. Raw result: {gamma_result}",
+            detail=f"Gamma result completed but did not include exportUrl/file URL. Raw result: {gamma_result}",
         )
 
     try:
@@ -307,7 +323,7 @@ def beautify_result(
             detail=f"Gamma generation is not completed yet. Current status: {status}",
         )
 
-    file_bytes = download_gamma_file(data, expected_format=GAMMA_EXPORT_FORMAT)
+    file_bytes = download_gamma_file(data)
 
     base_name = os.path.splitext(filename or "presentation")[0]
     ext = "pdf" if GAMMA_EXPORT_FORMAT.lower() == "pdf" else "pptx"
